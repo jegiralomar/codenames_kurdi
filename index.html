@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ku">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Codenames Badini</title>
+  <link rel="manifest" href="manifest.json">
+  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --blue:#3498db;--red:#e74c3c;--gold:#f1c40f;
+      --bg:#0f0a08;--panel-bg:#1a1412;--card-front:#decba4;--text:#eee;
+      --border:#333;--input-bg:#111;--input-color:white;
+      --mob-section-title:rgba(241,196,15,0.8);
+    }
+    body.light-mode {
+      --bg:#f0ece4;--panel-bg:#ffffff;--card-front:#fdf6ec;--text:#1a1412;
+      --border:#d0c8bc;--input-bg:#f5f0ea;--input-color:#1a1412;
+      --mob-section-title:#b8860b;
+    }
+    body{transition:background .3s,color .3s;}
+    *{box-sizing:border-box;transition:background .3s,color .3s,border-color .3s,box-shadow .2s;}
+    .card-inner{transition:transform .6s !important;}
+    body{font-family:'Vazirmatn',sans-serif;background:var(--bg);color:var(--text);margin:0;padding:0;overflow-x:hidden;}
+
+    /* Desktop */
+    .game-container{display:none;padding:15px;gap:15px;flex-direction:row;height:100vh;max-width:1500px;margin:0 auto;}
+    .side-panel{width:260px;display:flex;flex-direction:column;gap:10px;flex-shrink:0;}
+    .center-panel{flex:1;display:flex;flex-direction:column;gap:12px;overflow-y:auto;padding:5px;}
+
+    /* Cards */
+    .grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;width:100%;}
+    .card{height:100px;cursor:pointer;perspective:1000px;}
+    .card-inner{position:relative;width:100%;height:100%;transform-style:preserve-3d;}
+    .card.flipped .card-inner{transform:rotateY(180deg);}
+    .face{position:absolute;inset:0;backface-visibility:hidden;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:6px;font-weight:700;box-shadow:0 4px 6px rgba(0,0,0,.3);}
+    .front{background:var(--card-front);color:#2c3e50;border:1px solid #bba683;font-size:.95rem;}
+    .back{transform:rotateY(180deg);color:white;font-size:1rem;border:2px solid rgba(255,255,255,.2);}
+    .role-red{background:var(--red)!important;}
+    .role-blue{background:var(--blue)!important;}
+    .role-neutral{background:#7f8c8d!important;}
+    .role-black{background:#111!important;color:#ff4757!important;border:2px solid #ff4757!important;}
+    .spy-red{background:rgba(231,76,60,.55)!important;color:#fff!important;}
+    .spy-blue{background:rgba(52,152,219,.55)!important;color:#fff!important;}
+    .spy-neutral{background:rgba(127,140,141,.4)!important;color:#ddd!important;}
+    .spy-black{background:#111!important;color:#ff4757!important;border:2px solid #ff4757!important;}
+
+    /* UI */
+    .btn-action{width:100%;padding:12px;border-radius:10px;border:none;font-weight:700;cursor:pointer;font-family:'Vazirmatn';font-size:.9rem;}
+    .info-box{background:var(--panel-bg);border:1px solid var(--border);border-radius:12px;padding:12px;overflow-y:auto;font-size:.85rem;}
+
+    /* Modals */
+    #rules-modal,#winner-overlay,#clue-history-modal,#kick-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:4000;align-items:center;justify-content:center;padding:20px;}
+    .modal-content{background:var(--panel-bg);border:2px solid var(--gold);border-radius:20px;padding:30px;max-width:550px;width:100%;position:relative;max-height:80vh;overflow-y:auto;}
+    #lobby{position:fixed;inset:0;background:var(--bg);z-index:2000;display:flex;align-items:center;justify-content:center;}
+    .lobby-card{background:var(--panel-bg);padding:40px;border-radius:25px;border:1px solid var(--gold);text-align:center;width:360px;}
+    .lobby-input{width:100%;padding:12px;margin-bottom:12px;border-radius:8px;border:1px solid var(--border);background:var(--input-bg);color:var(--input-color);text-align:center;font-family:'Vazirmatn';font-size:.95rem;}
+
+    /* Toast / loading */
+    #reconnect-toast{display:none;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#333;color:white;padding:10px 20px;border-radius:20px;font-size:.85rem;z-index:9000;}
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    /* Turn */
+    .turn-active{animation:pulse-turn 1.4s ease-in-out infinite;}
+    @keyframes pulse-turn{0%,100%{opacity:1}50%{opacity:.7}}
+    #turn-banner{text-align:center;font-size:.8rem;font-weight:700;padding:4px 0 2px;letter-spacing:.05em;transition:color .3s;}
+    #mob-turn-pill{font-size:.72rem;font-weight:700;padding:3px 8px;border-radius:20px;border:1px solid currentColor;animation:pulse-turn 1.4s ease-in-out infinite;}
+    #guesses-left{font-size:.78rem;text-align:center;opacity:.7;margin-top:-6px;}
+
+    /* Clue pills */
+    .clue-pill{display:inline-block;padding:3px 8px;border-radius:12px;font-size:.78rem;font-weight:700;margin:2px;}
+    .clue-pill.red{background:rgba(231,76,60,.3);color:var(--red);border:1px solid var(--red);}
+    .clue-pill.blue{background:rgba(52,152,219,.3);color:var(--blue);border:1px solid var(--blue);}
+
+    /* Mobile */
+    @media(max-width:768px){
+      .game-container{display:none!important;}
+      #mobile-ui{display:flex;flex-direction:column;height:100vh;height:100dvh;overflow:hidden;}
+      #mob-topbar{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--panel-bg);border-bottom:1px solid var(--border);flex-shrink:0;gap:8px;}
+      #mob-scores{display:flex;gap:8px;font-weight:700;font-size:.9rem;}
+      .mob-score-red{color:var(--red);}.mob-score-blue{color:var(--blue);}
+      #mob-timer{color:var(--gold);font-size:.8rem;font-weight:700;}
+      #mob-copy{color:var(--gold);font-size:.8rem;cursor:pointer;border:1px solid var(--gold);border-radius:8px;padding:4px 8px;background:none;}
+      #mob-theme-btn{background:none;border:1px solid var(--border);border-radius:8px;padding:4px 8px;font-size:.85rem;cursor:pointer;color:var(--text);}
+      #mob-content{flex:1;overflow:hidden;position:relative;}
+      .mob-tab-panel{position:absolute;inset:0;overflow-y:auto;padding:10px;display:none;}
+      .mob-tab-panel.active{display:block;}
+      #mob-board{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;width:100%;}
+      #mob-board .card{height:62px;}
+      #mob-board .front{font-size:.72rem;padding:3px;}
+      #mob-board .back{font-size:.72rem;}
+      #mob-spy-tools{display:none;margin-top:10px;background:var(--panel-bg);padding:12px;border-radius:12px;border:1px solid var(--gold);}
+      #mob-spy-tools input,#mob-spy-tools select{background:var(--input-bg);color:var(--input-color);border:1px solid var(--border);padding:8px;border-radius:8px;}
+      #mob-end-turn{display:none;width:100%;margin-top:10px;padding:10px;background:var(--gold);color:#111;border:none;border-radius:10px;font-weight:700;font-family:'Vazirmatn';font-size:.9rem;cursor:pointer;}
+      #mob-teams-panel{gap:12px;display:none;flex-direction:column;}
+      #mob-teams-panel.active{display:flex;}
+      .mob-team-block{background:var(--panel-bg);border-radius:12px;padding:12px;border:1px solid var(--border);}
+      .mob-team-block h3{margin:0 0 8px;font-size:.95rem;}
+      .mob-team-block .mob-player{font-size:.85rem;padding:3px 0;}
+      #mob-log-panel{gap:10px;display:none;flex-direction:column;}
+      #mob-log-panel.active{display:flex;}
+      .mob-section-title{color:var(--mob-section-title);font-size:.8rem;font-weight:700;margin-bottom:4px;}
+      .mob-log-entry,.mob-chat-entry{font-size:.83rem;padding:4px 0;border-bottom:1px solid var(--border);}
+      #mob-chat-row{display:flex;gap:6px;margin-top:6px;}
+      #mob-chat-input{flex:1;background:var(--input-bg);color:var(--input-color);border:1px solid var(--border);padding:9px;border-radius:10px;font-family:'Vazirmatn';font-size:.85rem;}
+      #mob-chat-send{background:var(--gold);color:#111;border:none;border-radius:10px;padding:9px 14px;font-weight:700;cursor:pointer;font-family:'Vazirmatn';}
+      #mob-tabbar{display:flex;background:var(--panel-bg);border-top:1px solid var(--border);flex-shrink:0;}
+      .mob-tab-btn{flex:1;padding:10px 4px 8px;background:none;border:none;color:#666;font-size:.65rem;font-family:'Vazirmatn';cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;}
+      .mob-tab-btn .tab-icon{font-size:1.3rem;}
+      .mob-tab-btn.active{color:var(--gold);border-top:2px solid var(--gold);}
+      .lobby-card{width:90%;max-width:340px;padding:30px 24px;}
+    }
+    @media(min-width:769px){#mobile-ui{display:none!important;}}
+  </style>
+</head>
+<body onload="init()" onbeforeunload="handleUnload()">
+
+<div id="loading-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:5000;align-items:center;justify-content:center;flex-direction:column;gap:12px;">
+  <div style="width:40px;height:40px;border:3px solid #444;border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite;"></div>
+  <div id="reconnect-msg" style="color:var(--gold);font-size:.9rem;">چاڤەرێ بە...</div>
+</div>
+<div id="reconnect-toast">🔄 نوێکرن...</div>
+
+<div id="rules-modal"><div class="modal-content">
+  <button style="position:absolute;top:15px;left:15px;background:var(--red);color:white;border:none;border-radius:50%;width:30px;height:30px;cursor:pointer;" onclick="toggleRules(false)">×</button>
+  <h2 style="color:var(--gold);text-align:center;">📖 رێنمایێن یاریێ</h2>
+  <p>١. تیم: هەر تیمەک سیخۆرەک و چەند یاریزانان دگرتە خۆ.</p>
+  <p>٢. سیخۆر: پەیڤەکێ و ژمارەیەکێ ددەت بۆ کارتێن رەنگێ خۆ.</p>
+  <p>٣. یاریزان: ل سەر پەیڤان کلیک دکەت دا رەنگێ وان ئاشکرا کەت.</p>
+  <p>🔵 شین / 🔴 سۆر: کارتێن تیما تە نە.</p>
+  <p>⚫ کارتا رەش: ئەگەر ڤێ لێبدەی، تیما تە دێ دووریت.</p>
+  <p>🔢 ژمارەی تاکتیکێ: هژمارەی پەیڤا سیخۆری + ١ دەست هەیە.</p>
+</div></div>
+
+<div id="clue-history-modal"><div class="modal-content">
+  <button style="position:absolute;top:15px;left:15px;background:var(--red);color:white;border:none;border-radius:50%;width:30px;height:30px;cursor:pointer;" onclick="toggleClueHistory(false)">×</button>
+  <h2 style="color:var(--gold);text-align:center;">📜 مێژووی پەیڤان</h2>
+  <div id="clue-history-list" style="margin-top:10px;"></div>
+</div></div>
+
+<div id="kick-modal"><div class="modal-content" style="max-width:340px;">
+  <button style="position:absolute;top:15px;left:15px;background:var(--red);color:white;border:none;border-radius:50%;width:30px;height:30px;cursor:pointer;" onclick="toggleKickModal(false)">×</button>
+  <h3 style="color:var(--gold);text-align:center;margin-top:0;">🚫 دەرخستنا یاریزان</h3>
+  <div id="kick-list" style="margin-top:10px;"></div>
+</div></div>
+
+<div id="winner-overlay"><div style="background:var(--panel-bg);border:2px solid var(--gold);border-radius:24px;padding:50px 40px;text-align:center;max-width:420px;width:90%;display:flex;flex-direction:column;align-items:center;gap:20px;">
+  <div id="win-emoji" style="font-size:4rem;"></div>
+  <h1 id="win-txt" style="color:var(--gold);margin:0;font-size:1.8rem;"></h1>
+  <p id="win-sub" style="color:#aaa;margin:0;font-size:.95rem;"></p>
+  <button class="btn-action" style="width:220px;background:var(--gold);color:#111;" onclick="leaveAndReload()">گەران بۆ مالپەرێ سەرەکی</button>
+</div></div>
+
+<div id="lobby"><div class="lobby-card">
+  <h1 style="color:var(--gold);margin-bottom:20px;">Codenames Badini</h1>
+  <input class="lobby-input" id="nameInput" placeholder="ناڤێ تە">
+  <input class="lobby-input" id="roomInput" placeholder="کۆدێ ژوورێ">
+  <input class="lobby-input" id="passwordInput" placeholder="شەفرە (هەبێ)" type="password">
+  <button class="btn-action" style="background:var(--gold);color:#111;" onclick="handleJoin()">چوونا ژوور</button>
+  <button class="btn-action" style="background:transparent;border:1px solid var(--gold);color:var(--gold);margin-top:10px;" onclick="showCreatePanel()">ژوورەکا نوی ▾</button>
+  <div id="lobby-create" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:12px;">
+    <button class="btn-action" style="background:var(--gold);color:#111;" onclick="confirmCreate()">دروستکرن</button>
+  </div>
+</div></div>
+
+<!-- Desktop -->
+<div class="game-container" id="gameUI">
+  <div class="side-panel">
+    <div id="panel-blue" style="background:var(--blue);padding:12px;border-radius:12px;text-align:center;font-weight:bold;">شین <span id="score-blue">8</span></div>
+    <div id="controls-blue">
+      <button class="btn-action" style="background:var(--blue);" onclick="setRole('spymaster','blue')">سیخۆر 👁️</button>
+      <button class="btn-action" style="background:#222;border:1px solid var(--blue);margin-top:5px;color:white;" onclick="setRole('player','blue')">یاریزان 👤</button>
+      <button class="btn-action" style="background:transparent;border:1px solid #555;margin-top:5px;color:#aaa;font-size:.8rem;" onclick="setRole('spectator','spectator')">تەماشەکار 👀</button>
+    </div>
+    <div id="list-blue" class="info-box" style="min-height:60px;"></div>
+    <div class="info-box" id="side1-chat" style="flex:1;"></div>
+    <input type="text" id="chat-input" placeholder="نامە..." onkeydown="if(event.key==='Enter')sendChat()" style="width:100%;background:var(--input-bg);color:var(--input-color);border:1px solid var(--border);padding:10px;border-radius:10px;">
+  </div>
+  <div class="center-panel">
+    <div style="display:flex;justify-content:space-between;width:100%;align-items:center;background:var(--panel-bg);padding:10px;border-radius:15px;border:1px solid var(--border);">
+      <div id="displayRoomID" onclick="revealAndCopyCode()" style="color:var(--gold);font-weight:bold;cursor:pointer;">کۆپی بکە 👁️</div>
+      <div style="display:flex;gap:8px;">
+        <button onclick="toggleRules(true)" style="background:none;border:1px solid var(--gold);color:var(--gold);border-radius:15px;padding:5px 12px;cursor:pointer;">رێنما</button>
+        <button onclick="toggleClueHistory(true)" style="background:none;border:1px solid var(--border);color:var(--text);border-radius:15px;padding:5px 12px;cursor:pointer;">📜</button>
+      </div>
+      <div id="match-timer" style="color:var(--gold);font-weight:bold;">00:00</div>
+    </div>
+    <div id="clue-bar" style="background:var(--panel-bg);padding:15px;border-radius:15px;border:1px solid var(--border);text-align:center;color:var(--gold);font-weight:bold;">چاڤەرێی پەیڤا سیخۆری بە...</div>
+    <div id="turn-banner"></div>
+    <div id="guesses-left"></div>
+    <div id="board" class="grid"></div>
+    <div id="spy-tools" style="display:none;background:var(--panel-bg);padding:15px;border-radius:15px;border:1px solid var(--gold);">
+      <div style="display:flex;gap:10px;">
+        <input type="text" id="clueW" placeholder="پەیڤ" style="flex:2;padding:10px;background:var(--input-bg);color:var(--input-color);border:1px solid var(--border);border-radius:8px;">
+        <select id="clueC" style="flex:1;background:var(--input-bg);color:var(--input-color);border:1px solid var(--border);border-radius:8px;padding:10px;">
+          <option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option>
+        </select>
+      </div>
+      <button onclick="submitClue()" style="width:100%;margin-top:10px;background:#27ae60;color:white;" class="btn-action">پەیڤێ بنێرە</button>
+    </div>
+    <button id="end-turn" onclick="endTurn()" style="display:none;background:var(--gold);color:black;" class="btn-action">گەرێ ب دووماهیک بینە</button>
+  </div>
+  <div class="side-panel">
+    <div id="panel-red" style="background:var(--red);padding:12px;border-radius:12px;text-align:center;font-weight:bold;">سۆر <span id="score-red">9</span></div>
+    <div id="controls-red">
+      <button class="btn-action" style="background:var(--red);" onclick="setRole('spymaster','red')">سیخۆر 👁️</button>
+      <button class="btn-action" style="background:#222;border:1px solid var(--red);margin-top:5px;color:white;" onclick="setRole('player','red')">یاریزان 👤</button>
+    </div>
+    <div id="list-red" class="info-box" style="min-height:60px;"></div>
+    <div class="info-box" id="game-log" style="flex:1;"></div>
+    <div style="display:flex;gap:6px;">
+      <button id="restart-btn" class="btn-action" style="background:#27ae60;color:white;display:none;flex:1;" onclick="restartGame()">نویکرنا یاریێ</button>
+      <button id="kick-btn" class="btn-action" style="background:#c0392b;color:white;display:none;flex:0 0 44px;font-size:1.1rem;" onclick="toggleKickModal(true)">🚫</button>
+    </div>
+    <button class="btn-action" style="background:transparent;border:1px solid var(--border);color:#888;" onclick="userLeave()">دەرکەفتن</button>
+  </div>
+</div>
+
+<!-- Mobile -->
+<div id="mobile-ui" style="display:none;">
+  <div id="mob-topbar">
+    <div id="mob-scores">
+      <span class="mob-score-red">🔴 <span id="mob-score-red">9</span></span>
+      <span class="mob-score-blue">🔵 <span id="mob-score-blue">8</span></span>
+    </div>
+    <div id="mob-clue-inline" style="color:var(--gold);font-size:.8rem;font-weight:700;flex:1;text-align:center;"></div>
+    <span id="mob-timer" style="color:var(--gold);font-size:.8rem;font-weight:700;">00:00</span>
+    <button id="mob-copy" onclick="revealAndCopyCode()">کۆد 👁️</button>
+    <button id="mob-theme-btn" onclick="toggleTheme()">🌙</button>
+    <span id="mob-turn-pill"></span>
+  </div>
+  <div id="mob-content">
+    <div id="mob-panel-board" class="mob-tab-panel active">
+      <div id="mob-board" class="grid"></div>
+      <div id="mob-spy-tools">
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+          <input type="text" id="mob-clueW" placeholder="پەیڤ" style="flex:2;">
+          <select id="mob-clueC" style="flex:1;"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option></select>
+        </div>
+        <button onclick="submitClueMob()" style="width:100%;background:#27ae60;color:white;border:none;border-radius:10px;padding:10px;font-weight:700;font-family:'Vazirmatn';cursor:pointer;">پەیڤێ بنێرە</button>
+      </div>
+      <button id="mob-end-turn" onclick="endTurn()">گەرێ ب دووماهیک بینە</button>
+    </div>
+    <div id="mob-panel-teams" class="mob-tab-panel">
+      <div id="mob-teams-panel">
+        <div class="mob-team-block" style="border-color:var(--blue);">
+          <h3 style="color:var(--blue);">🔵 تیما شین — <span id="mob-score-blue2">8</span></h3>
+          <div id="mob-controls-blue"></div><div id="mob-list-blue" style="margin-top:8px;"></div>
+        </div>
+        <div class="mob-team-block" style="border-color:var(--red);">
+          <h3 style="color:var(--red);">🔴 تیما سۆر — <span id="mob-score-red2">9</span></h3>
+          <div id="mob-controls-red"></div><div id="mob-list-red" style="margin-top:8px;"></div>
+        </div>
+        <div style="display:flex;gap:6px;margin-top:6px;">
+          <button id="mob-restart-btn" class="btn-action" style="background:#27ae60;color:white;display:none;flex:1;" onclick="restartGame()">نویکرنا یاریێ</button>
+          <button id="mob-kick-btn" class="btn-action" style="background:#c0392b;color:white;display:none;flex:0 0 44px;font-size:1.1rem;" onclick="toggleKickModal(true)">🚫</button>
+        </div>
+        <button class="btn-action" style="background:transparent;border:1px solid var(--border);color:#888;margin-top:6px;" onclick="userLeave()">دەرکەفتن</button>
+      </div>
+    </div>
+    <div id="mob-panel-log" class="mob-tab-panel">
+      <div id="mob-log-panel">
+        <div><div class="mob-section-title">📋 چالاکیێن یاریێ</div><div id="mob-game-log"></div></div>
+        <div style="margin-top:12px;">
+          <div class="mob-section-title">💬 چات</div>
+          <div id="mob-chat-list"></div>
+          <div id="mob-chat-row">
+            <input type="text" id="mob-chat-input" placeholder="نامە..." onkeydown="if(event.key==='Enter')sendChatMob()">
+            <button id="mob-chat-send" onclick="sendChatMob()">↑</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="mob-tabbar">
+    <button class="mob-tab-btn active" onclick="mobTab('board',this)"><span class="tab-icon">🎴</span><span>بۆرد</span></button>
+    <button class="mob-tab-btn" onclick="mobTab('teams',this)"><span class="tab-icon">👥</span><span>تیم</span></button>
+    <button class="mob-tab-btn" onclick="mobTab('log',this)"><span class="tab-icon">📋</span><span>چالاکی</span></button>
+  </div>
+</div>
+
+<script>
+// ── Supabase ──────────────────────────────────────────────────────────────────
+const SUPA_URL  = 'https://dbemqrmxybhdqutddevj.supabase.co';
+const SUPA_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRiZW1xcm14eWJoZHF1dGRkZXZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0NDEzODcsImV4cCI6MjA4OTAxNzM4N30.LnHbIemkoU24IyPLOh2wUwN7xR2ZHQiTJXZKnC5Vi-g';
+const sb = supabase.createClient(SUPA_URL, SUPA_KEY);
+let realtimeSub = null;
+
+// ── Word list ─────────────────────────────────────────────────────────────────
+const WORDS = [
+  {k:"مالـ",e:"house"},{k:"دار",e:"tree"},{k:"ئاڤ",e:"water"},{k:"ئاگر",e:"fire"},{k:"خاک",e:"earth"},
+  {k:"ئاسمان",e:"sky"},{k:"رووی",e:"face"},{k:"دەست",e:"hand"},{k:"چاو",e:"eye"},{k:"گوێ",e:"ear"},
+  {k:"زمان",e:"tongue"},{k:"سەر",e:"head"},{k:"دڵ",e:"heart"},{k:"خوێن",e:"blood"},{k:"گیان",e:"soul"},
+  {k:"باد",e:"wind"},{k:"رووبار",e:"river"},{k:"چیا",e:"mountain"},{k:"زەوی",e:"land"},{k:"دەریا",e:"sea"},
+  {k:"شەو",e:"night"},{k:"ڕۆژ",e:"day"},{k:"مانگ",e:"moon"},{k:"ستێر",e:"star"},{k:"خۆر",e:"sun"},
+  {k:"باران",e:"rain"},{k:"بەفر",e:"snow"},{k:"تاڤگە",e:"beam"},{k:"رووناکی",e:"light"},{k:"تاریکی",e:"dark"},
+  {k:"کتێب",e:"book"},{k:"پەنا",e:"pen"},{k:"خانی",e:"school"},{k:"مامۆستا",e:"teacher"},{k:"مناڵ",e:"child"},
+  {k:"پیاو",e:"man"},{k:"ژن",e:"woman"},{k:"کور",e:"son"},{k:"کچ",e:"daughter"},{k:"برا",e:"brother"},
+  {k:"خوشک",e:"sister"},{k:"باپیر",e:"grandfather"},{k:"داپیر",e:"grandmother"},{k:"باڤ",e:"father"},{k:"دایک",e:"mother"},
+  {k:"هاووڵاتی",e:"friend"},{k:"دوژمن",e:"enemy"},{k:"قارەمان",e:"hero"},{k:"پاداشت",e:"reward"},{k:"سزا",e:"punishment"},
+  {k:"یاری",e:"game"},{k:"وەرزش",e:"sport"},{k:"فیلم",e:"film"},{k:"موزیک",e:"music"},{k:"هونەر",e:"art"},
+  {k:"زەمەن",e:"time"},{k:"مێژوو",e:"history"},{k:"پێشەرۆ",e:"future"},{k:"ئێوارە",e:"evening"},{k:"سبەی",e:"morning"},
+  {k:"شار",e:"city"},{k:"گوند",e:"village"},{k:"ئەمریکا",e:"America"},{k:"ئەوروپا",e:"Europe"},{k:"کوردستان",e:"Kurdistan"},
+  {k:"دەرگا",e:"door"},{k:"کوند",e:"bridge"},{k:"رێگا",e:"road"},{k:"ئۆتۆمبێل",e:"car"},{k:"فڕۆکە",e:"plane"},
+  {k:"سیف",e:"sword"},{k:"توپ",e:"ball"},{k:"زنگ",e:"bell"},{k:"مەسەلە",e:"problem"},{k:"بەرپرسیار",e:"responsible"},
+  {k:"ئازادی",e:"freedom"},{k:"ئاشتی",e:"peace"},{k:"جەنگ",e:"war"},{k:"ئارام",e:"calm"},{k:"خۆشی",e:"joy"},
+  {k:"خەم",e:"sorrow"},{k:"ئومێد",e:"hope"},{k:"بیر",e:"thought"},{k:"ناسنامە",e:"identity"},{k:"نیشتمان",e:"homeland"},
+  {k:"پازی",e:"arm"},{k:"پێ",e:"foot"},{k:"ملو",e:"neck"},{k:"زور",e:"power"},{k:"لاوازی",e:"weakness"},
+  {k:"گوڵ",e:"flower"},{k:"دار میوە",e:"fruit tree"},{k:"نەخۆشخانە",e:"hospital"},{k:"دەرمان",e:"medicine"},{k:"ژیان",e:"life"},
+  {k:"مردن",e:"death"},{k:"تەماشا",e:"watch"},{k:"گوێدان",e:"listen"},{k:"کارکردن",e:"work"},{k:"خەو",e:"sleep"},
+  {k:"نان",e:"bread"},{k:"ئاو",e:"water2"},{k:"گۆشت",e:"meat"},{k:"میوە",e:"fruit"},{k:"شیر",e:"milk"},
+  {k:"پارە",e:"money"},{k:"بازار",e:"market"},{k:"کڕین",e:"buy"},{k:"فرۆشتن",e:"sell"},{k:"بەها",e:"value"}
+];
+
+function getWords(n) {
+  const shuffled = [...WORDS].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, n);
+}
+
+// ── App State ─────────────────────────────────────────────────────────────────
+var App = {
+  roomID:'', playerName:'', myRole:'', myTeam:'', password:'',
+  gameState:null, lastStateHash:'', wakeLock:null,
+  boardBuilt:false, boardBuiltForRole:'',
+  mobBoardBuilt:false, mobBoardBuiltForRole:''
+};
+var Prev = {turn:null, clueWord:'', playerCount:0, gameOver:false};
+
+// ── Audio ─────────────────────────────────────────────────────────────────────
+var AC=null, soundEnabled=true;
+function getAC(){if(!AC)AC=new(window.AudioContext||window.webkitAudioContext)();return AC;}
+function playTone(freq,type,dur,gain){
+  if(!soundEnabled)return;
+  try{const ac=getAC(),o=ac.createOscillator(),g=ac.createGain();o.connect(g);g.connect(ac.destination);
+  o.type=type||'sine';o.frequency.setValueAtTime(freq,ac.currentTime);
+  g.gain.setValueAtTime(gain||.1,ac.currentTime);g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+dur);
+  o.start();o.stop(ac.currentTime+dur);}catch(e){}
+}
+function playChord(freqs,dur){freqs.forEach((f,i)=>setTimeout(()=>playTone(f,'sine',dur,.07),i*60));}
+var Sounds={
+  flip:()=>playTone(440,'sine',.12,.08),
+  correct:()=>playChord([523,659,784],.5),
+  wrong:()=>playTone(220,'sine',.4,.1),
+  neutral:()=>playTone(330,'sine',.25,.07),
+  clue:()=>playChord([392,494],.4),
+  win:()=>{playChord([523,659,784,1047],.8);setTimeout(()=>playChord([659,784,988,1175],.8),400);},
+  black:()=>{playTone(110,'sine',.6,.15);setTimeout(()=>playTone(82,'sine',.8,.1),200);},
+  turn:()=>playTone(494,'sine',.2,.06),
+  join:()=>playTone(587,'sine',.15,.06)
+};
+function triggerSounds(s){
+  if(!s||!App.gameState)return;
+  if(s.clue.word&&s.clue.word!==Prev.clueWord)Sounds.clue();
+  if(Prev.turn&&s.turn!==Prev.turn&&!s.gameOver)Sounds.turn();
+  if(s.players.length>Prev.playerCount)Sounds.join();
+  if(s.gameOver&&!Prev.gameOver){const bh=s.log&&s.log.some(l=>l.startsWith('💀'));if(bh)Sounds.black();else Sounds.win();}
+  Prev.turn=s.turn;Prev.clueWord=s.clue.word;Prev.playerCount=s.players.length;Prev.gameOver=s.gameOver;
+}
+
+// ── Wake Lock ─────────────────────────────────────────────────────────────────
+async function requestWakeLock(){try{if('wakeLock'in navigator)App.wakeLock=await navigator.wakeLock.request('screen');}catch(e){}}
+document.addEventListener('visibilitychange',async()=>{
+  if(document.visibilityState==='visible'){if(!App.wakeLock)await requestWakeLock();}
+});
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function isMobile(){return window.innerWidth<=768;}
+function showLoading(v,msg){document.getElementById('loading-overlay').style.display=v?'flex':'none';if(msg)document.getElementById('reconnect-msg').textContent=msg;}
+function showToast(msg,d){const t=document.getElementById('reconnect-toast');t.textContent=msg;t.style.display='block';setTimeout(()=>t.style.display='none',d||2000);}
+function toggleRules(v){document.getElementById('rules-modal').style.display=v?'flex':'none';}
+function toggleClueHistory(v){document.getElementById('clue-history-modal').style.display=v?'flex':'none';if(v)renderClueHistory();}
+function toggleKickModal(v){document.getElementById('kick-modal').style.display=v?'flex':'none';if(v)renderKickList();}
+function stateHash(s){return JSON.stringify(s,Object.keys(s||{}).sort());}
+function vibrate(ms){try{navigator.vibrate&&navigator.vibrate(ms||40);}catch(e){}}
+function sanitize(str,max){if(typeof str!=='string')return'';return str.replace(/[<>"'`]/g,'').trim().slice(0,max||100);}
+
+function revealAndCopyCode(){
+  navigator.clipboard.writeText(App.roomID);
+  const el=document.getElementById('displayRoomID'),mob=document.getElementById('mob-copy');
+  if(el){el.textContent=App.roomID+' ✅';setTimeout(()=>el.textContent='کۆپی بکە 👁️',3000);}
+  if(mob){mob.textContent=App.roomID+' ✅';setTimeout(()=>mob.textContent='کۆد 👁️',3000);}
+  // Web Share API for mobile
+  if(navigator.share){navigator.share({title:'Codenames Badini',text:'بێ یارییێ!',url:location.href});}
+}
+
+// ── Theme ─────────────────────────────────────────────────────────────────────
+function toggleTheme(){
+  const light=document.body.classList.toggle('light-mode');
+  localStorage.setItem('theme',light?'light':'dark');
+  const btn=document.getElementById('mob-theme-btn');if(btn)btn.textContent=light?'☀️':'🌙';
+}
+function applyTheme(){
+  const saved=localStorage.getItem('theme');
+  const light=saved?saved==='light':window.matchMedia('(prefers-color-scheme: light)').matches;
+  if(light){document.body.classList.add('light-mode');const btn=document.getElementById('mob-theme-btn');if(btn)btn.textContent='☀️';}
+}
+
+// ── Supabase DB helpers ───────────────────────────────────────────────────────
+async function dbGetRoom(id){
+  const{data,error}=await sb.from('rooms').select('state').eq('id',id).single();
+  if(error||!data)return null;
+  return data.state;
+}
+async function dbSetRoom(id,state){
+  await sb.from('rooms').upsert({id,state,updated_at:new Date().toISOString()});
+}
+
+// ── Real-time subscription ────────────────────────────────────────────────────
+function subscribeRoom(id){
+  if(realtimeSub)sb.removeChannel(realtimeSub);
+  realtimeSub=sb.channel('room-'+id)
+    .on('postgres_changes',{event:'UPDATE',schema:'public',table:'rooms',filter:'id=eq.'+id},
+      payload=>{
+        const s=payload.new.state;
+        if(s)updateUI(s);
+      })
+    .subscribe();
+}
+
+// ── Game logic (all runs client-side now) ─────────────────────────────────────
+function makeBoard(){
+  const words=getWords(25);
+  const roles=['black',...Array(9).fill('red'),...Array(8).fill('blue'),...Array(7).fill('neutral')].sort(()=>Math.random()-.5);
+  return words.map((w,i)=>({kurdish:w.k,english:w.e,role:roles[i],flipped:false}));
+}
+
+async function createRoom(ownerName,password){
+  const id=Math.floor(10000+Math.random()*90000).toString();
+  const state={
+    roomId:id,password:sanitize(password,50)||'',owner:sanitize(ownerName,40),
+    board:makeBoard(),turn:'red',scores:{red:9,blue:8},
+    clue:{word:'',count:0},guessesLeft:0,clueHistory:[],
+    players:[],log:['ژوور هاتە دروستکرن'],chat:[],
+    gameOver:false,winner:null,matchStartTime:null,lastActivity:Date.now()
+  };
+  await dbSetRoom(id,state);
+  return state;
+}
+
+async function serverFlipCard(roomId,index,playerName){
+  const state=await dbGetRoom(roomId);
+  if(!state)return null;
+  const p=state.players.find(x=>x.name===playerName);
+  if(!p||p.role!=='player'||p.team!==state.turn)return state;
+  if(!state.clue.word||state.gameOver||state.board[index].flipped)return state;
+  if(!state.matchStartTime)state.matchStartTime=Date.now();
+  const card=state.board[index];card.flipped=true;
+  const logMsg=playerName+' : '+card.kurdish;
+  if(card.role==='black'){state.gameOver=true;state.winner=state.turn==='red'?'blue':'red';state.log.unshift('💀 '+logMsg);}
+  else if(card.role===state.turn){
+    if(state.scores[card.role]>0)state.scores[card.role]--;
+    state.guessesLeft=Math.max(0,(state.guessesLeft||1)-1);
+    state.log.unshift('✅ '+logMsg);
+    if(state.scores[card.role]===0){state.gameOver=true;state.winner=card.role;}
+    else if(state.guessesLeft<=0){state.turn=state.turn==='red'?'blue':'red';state.clue={word:'',count:0};state.guessesLeft=0;}
+  }else{
+    if(card.role!=='neutral'&&state.scores[card.role]>0)state.scores[card.role]--;
+    state.log.unshift(card.role==='neutral'?'⚪ '+logMsg:'❌ '+logMsg);
+    state.turn=state.turn==='red'?'blue':'red';state.clue={word:'',count:0};state.guessesLeft=0;
+  }
+  state.lastActivity=Date.now();
+  await dbSetRoom(roomId,state);
+  return state;
+}
+
+async function serverSubmitClue(roomId,word,count,playerName){
+  const state=await dbGetRoom(roomId);if(!state)return null;
+  const p=state.players.find(x=>x.name===playerName);
+  if(!p||p.role!=='spymaster'||p.team!==state.turn||state.clue.word)return state;
+  const w=sanitize(word,60);if(!w)return state;
+  const n=Math.min(Math.max(parseInt(count)||1,1),9);
+  state.clue={word:w,count:n};state.guessesLeft=n+1;
+  if(!state.clueHistory)state.clueHistory=[];
+  state.clueHistory.push({word:w,count:n,team:state.turn,spymaster:playerName});
+  state.log.unshift('📢 '+w+' ('+n+')');
+  state.lastActivity=Date.now();
+  await dbSetRoom(roomId,state);return state;
+}
+
+async function serverEndTurn(roomId,playerName){
+  const state=await dbGetRoom(roomId);if(!state)return null;
+  const p=state.players.find(x=>x.name===playerName);
+  if(!p||p.role!=='player'||p.team!==state.turn)return state;
+  state.turn=state.turn==='red'?'blue':'red';state.clue={word:'',count:0};state.guessesLeft=0;
+  state.lastActivity=Date.now();await dbSetRoom(roomId,state);return state;
+}
+
+async function serverRestartGame(roomId,playerName){
+  const state=await dbGetRoom(roomId);if(!state)return null;
+  if(state.owner!==playerName)return{error:'NOT_OWNER'};
+  state.board=makeBoard();state.players=[];state.turn='red';state.scores={red:9,blue:8};
+  state.clue={word:'',count:0};state.guessesLeft=0;state.clueHistory=[];
+  state.gameOver=false;state.winner=null;state.matchStartTime=null;
+  state.log=['یارییەکا نوی دەستپێکر - رۆلەکێ نوی هەلبژێرە'];
+  state.lastActivity=Date.now();await dbSetRoom(roomId,state);return state;
+}
+
+async function serverSendMessage(roomId,name,msg){
+  const state=await dbGetRoom(roomId);if(!state)return null;
+  state.chat.unshift({name:sanitize(name,40),msg:sanitize(msg,200)});
+  if(state.chat.length>20)state.chat.pop();
+  state.lastActivity=Date.now();await dbSetRoom(roomId,state);return state;
+}
+
+async function serverJoinPlayer(roomId,team,role,name){
+  const state=await dbGetRoom(roomId);if(!state)return null;
+  const cleanName=sanitize(name,40);if(!cleanName)return{error:'INVALID_NAME'};
+  if(role==='spymaster'&&state.players.some(p=>p.team===team&&p.role==='spymaster'&&p.name!==cleanName))return{error:'ROLE_TAKEN'};
+  state.players=state.players.filter(p=>p.name!==cleanName);
+  const label=role==='spymaster'?'سیخۆر':role==='spectator'?'تەماشەکار':'کارمەند';
+  state.players.push({name:cleanName,team:team||'spectator',role});
+  state.log.unshift(cleanName+' وەک '+label+' پشکدار بوو');
+  state.lastActivity=Date.now();await dbSetRoom(roomId,state);return state;
+}
+
+async function serverLeaveRoom(roomId,playerName){
+  const state=await dbGetRoom(roomId);if(!state)return;
+  state.players=state.players.filter(p=>p.name!==playerName);
+  state.lastActivity=Date.now();await dbSetRoom(roomId,state);
+}
+
+async function serverKickPlayer(roomId,ownerName,targetName){
+  const state=await dbGetRoom(roomId);if(!state)return null;
+  if(state.owner!==ownerName)return{error:'NOT_OWNER'};
+  state.players=state.players.filter(p=>p.name!==targetName);
+  state.log.unshift('🚫 '+targetName+' ji odeyê hat derxistin');
+  state.lastActivity=Date.now();await dbSetRoom(roomId,state);return state;
+}
+
+// strip roles from board for non-spymasters
+function stripBoard(state,playerName){
+  const p=state.players.find(x=>x.name===playerName);
+  if(!state.gameOver&&(!p||p.role!=='spymaster')){
+    state.board=state.board.map(c=>c.flipped?c:{kurdish:c.kurdish,english:c.english,flipped:false});
+  }
+  return state;
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+function init(){
+  applyTheme();
+  const params=new URLSearchParams(location.search);
+  const urlRoom=params.get('room');
+  if(urlRoom)document.getElementById('roomInput').value=urlRoom;
+  const r=localStorage.getItem('lastRoom');
+  if(!r)return;
+  App.roomID=r;
+  App.playerName=localStorage.getItem('n_'+r)||'';
+  App.myRole=localStorage.getItem('r_'+r)||'';
+  App.myTeam=localStorage.getItem('t_'+r)||'';
+  App.password=localStorage.getItem('p_'+r)||'';
+  if(!App.playerName)return;
+  showLoading(true,'نوێکردنەوە...');
+  dbGetRoom(r).then(state=>{
+    showLoading(false);
+    if(!state){localStorage.clear();return;}
+    if(App.myRole&&App.myTeam){
+      serverJoinPlayer(r,App.myTeam,App.myRole,App.playerName).then(s=>{
+        enterGame(s&&!s.error?s:state);
+      });
+    }else{enterGame(stripBoard(state,App.playerName));}
+  }).catch(()=>{showLoading(false);showToast('❌ پەیوەندی سەرشکست');});
+}
+
+function showCreatePanel(){
+  const p=document.getElementById('lobby-create');
+  p.style.display=p.style.display==='none'?'block':'none';
+}
+
+async function handleJoin(){
+  const nameVal=document.getElementById('nameInput').value.trim();
+  App.roomID=document.getElementById('roomInput').value.trim();
+  App.password=document.getElementById('passwordInput').value;
+  if(!App.roomID)return;
+  if(nameVal)App.playerName=nameVal.slice(0,40);
+  else if(!App.playerName)App.playerName=(prompt('ناڤێ تە چییە؟')||'').trim().slice(0,40);
+  if(!App.playerName)return;
+  showLoading(true,'چوونا ژوور...');
+  const state=await dbGetRoom(App.roomID);
+  showLoading(false);
+  if(!state){alert('ژوور نەهاتە دیتن');return;}
+  if(state.password&&state.password!==App.password){alert('شەفرەیا şaş e');return;}
+  enterGame(stripBoard(state,App.playerName));
+}
+
+async function confirmCreate(){
+  const nameVal=document.getElementById('nameInput').value.trim();
+  App.password=document.getElementById('passwordInput').value;
+  if(nameVal)App.playerName=nameVal.slice(0,40);
+  else if(!App.playerName)App.playerName=(prompt('ناڤێ تە چییە؟')||'').trim().slice(0,40);
+  if(!App.playerName)return;
+  showLoading(true,'دروستکرن...');
+  const state=await createRoom(App.playerName,App.password);
+  showLoading(false);
+  App.roomID=state.roomId;
+  enterGame(state);
+}
+
+function enterGame(s){
+  localStorage.setItem('lastRoom',App.roomID);
+  localStorage.setItem('p_'+App.roomID,App.password||'');
+  try{history.replaceState(null,'','?room='+App.roomID);}catch(e){}
+  document.getElementById('lobby').style.display='none';
+  if(isMobile()){document.getElementById('mobile-ui').style.display='flex';document.getElementById('mobile-ui').style.flexDirection='column';}
+  else{document.getElementById('gameUI').style.display='flex';}
+  requestWakeLock();
+  subscribeRoom(App.roomID);
+  setInterval(tick,1000);
+  Prev.turn=s.turn;Prev.clueWord=s.clue&&s.clue.word||'';Prev.playerCount=(s.players||[]).length;Prev.gameOver=s.gameOver;
+  updateUI(s);
+}
+
+// ── UI Update ─────────────────────────────────────────────────────────────────
+function updateUI(rawState){
+  if(!rawState||rawState.error)return;
+  const s=stripBoard(JSON.parse(JSON.stringify(rawState)),App.playerName);
+  const h=stateHash(s);if(h===App.lastStateHash)return;
+  triggerSounds(s);
+  App.gameState=s;App.lastStateHash=h;
+
+  document.getElementById('score-red').textContent=s.scores.red;
+  document.getElementById('score-blue').textContent=s.scores.blue;
+  updateTurnIndicator(s);
+
+  const gl=document.getElementById('guesses-left');
+  if(gl)gl.textContent=(s.clue.word&&s.guessesLeft>0&&!s.gameOver)?'دەست: '+s.guessesLeft:'';
+
+  document.getElementById('controls-blue').style.display=App.myRole?'none':'block';
+  document.getElementById('controls-red').style.display=App.myRole?'none':'block';
+
+  const lb=document.getElementById('list-blue'),lr=document.getElementById('list-red');
+  lb.innerHTML='';lr.innerHTML='';
+  s.players.forEach(p=>{
+    const d=document.createElement('div');
+    d.textContent=(p.role==='spymaster'?'👁️':p.role==='spectator'?'👀':'👤')+' '+p.name;
+    if(p.team==='blue')lb.appendChild(d);else if(p.team==='red')lr.appendChild(d);
+  });
+
+  updateBoard(s);
+
+  document.getElementById('clue-bar').textContent=s.clue.word?s.clue.word.toUpperCase()+' ('+s.clue.count+')':'چاڤەرێی پەیڤا سیخۆری بە...';
+  document.getElementById('spy-tools').style.display=(App.myRole==='spymaster'&&s.turn===App.myTeam&&!s.clue.word)?'block':'none';
+  document.getElementById('end-turn').style.display=(App.myRole==='player'&&s.turn===App.myTeam&&s.clue.word)?'block':'none';
+
+  const isOwner=s.owner===App.playerName;
+  ['restart-btn','kick-btn'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display=isOwner?'block':'none';});
+
+  const log=document.getElementById('game-log');log.innerHTML='';
+  s.log.slice(0,15).forEach(m=>{const d=document.createElement('div');d.textContent=m;log.appendChild(d);});
+
+  const chat=document.getElementById('side1-chat');chat.innerHTML='';
+  s.chat.slice(0,10).forEach(m=>{const d=document.createElement('div'),b=document.createElement('b');b.textContent=m.name+': ';d.appendChild(b);d.appendChild(document.createTextNode(m.msg));chat.appendChild(d);});
+
+  if(s.gameOver){
+    document.getElementById('winner-overlay').style.display='flex';
+    const ir=s.winner==='red';
+    document.getElementById('win-emoji').textContent=ir?'🔴':'🔵';
+    document.getElementById('win-txt').textContent=ir?'تیما سۆر بسەرکەفت!':'تیما شین بسەرکەفت!';
+    const bh=s.log&&s.log.some(l=>l.startsWith('💀'));
+    document.getElementById('win-sub').textContent=bh?'💀 کارتا بکوژ هاتە هەلبژارتن!':'';
+  }
+  if(isMobile())updateMobileUI(s);
+}
+
+function updateTurnIndicator(s){
+  const ir=s.turn==='red',ib=s.turn==='blue';
+  const bp=document.getElementById('panel-blue'),rp=document.getElementById('panel-red');
+  if(bp){bp.classList.toggle('turn-active',ib&&!s.gameOver);bp.style.boxShadow=(ib&&!s.gameOver)?'0 0 0 3px white,0 0 18px 6px var(--blue)':'';}
+  if(rp){rp.classList.toggle('turn-active',ir&&!s.gameOver);rp.style.boxShadow=(ir&&!s.gameOver)?'0 0 0 3px white,0 0 18px 6px var(--red)':'';}
+  const banner=document.getElementById('turn-banner');
+  if(banner){banner.textContent=s.gameOver?'':(ir?'▶ گەرا تیما سۆر':'▶ گەرا تیما شین');banner.style.color=ir?'var(--red)':'var(--blue)';}
+  const pill=document.getElementById('mob-turn-pill');
+  if(pill){pill.style.display=s.gameOver?'none':'inline';pill.textContent=ir?'🔴 گەرا':'🔵 گەرا';pill.style.color=ir?'var(--red)':'var(--blue)';}
+  const msr=document.getElementById('mob-score-red'),msb=document.getElementById('mob-score-blue');
+  if(msr)msr.closest('span').style.opacity=(ir||s.gameOver)?'1':'0.4';
+  if(msb)msb.closest('span').style.opacity=(ib||s.gameOver)?'1':'0.4';
+}
+
+function buildCard(c,i,isMob){
+  const card=document.createElement('div');card.className='card'+(c.flipped?' flipped':'');
+  card.addEventListener('click',()=>handleFlip(i));
+  const inner=document.createElement('div');inner.className='card-inner';
+  const front=document.createElement('div');front.className='face front';
+  if(App.myRole==='spymaster'&&!c.flipped&&c.role)front.classList.add('spy-'+c.role);
+  front.textContent=c.kurdish;
+  if(!isMob&&c.english){const sm=document.createElement('small');sm.style.opacity='.6';sm.textContent=c.english;front.appendChild(document.createElement('br'));front.appendChild(sm);}
+  const back=document.createElement('div');back.className='face back'+(c.role?' role-'+c.role:'');
+  back.textContent=c.kurdish;inner.appendChild(front);inner.appendChild(back);card.appendChild(inner);return card;
+}
+function patchBoard(el,s){
+  const cards=el.querySelectorAll('.card');
+  s.board.forEach((c,i)=>{
+    const card=cards[i];if(!card)return;
+    if(!card.classList.contains('flipped')&&c.flipped){card.classList.add('flipped');vibrate(30);if(c.role){const b=card.querySelector('.back');if(b)b.className='face back role-'+c.role;}}
+    const f=card.querySelector('.front');
+    if(f&&!c.flipped&&c.role)f.className=App.myRole==='spymaster'?'face front spy-'+c.role:'face front';
+  });
+}
+function updateBoard(s){
+  const el=document.getElementById('board'),rc=App.myRole!==App.boardBuiltForRole;
+  if(!App.boardBuilt||el.children.length!==s.board.length||rc){el.innerHTML='';s.board.forEach((c,i)=>el.appendChild(buildCard(c,i,false)));App.boardBuilt=true;App.boardBuiltForRole=App.myRole;return;}
+  patchBoard(el,s);
+}
+function updateMobileBoard(s){
+  const el=document.getElementById('mob-board');if(!el)return;
+  const rc=App.myRole!==App.mobBoardBuiltForRole;
+  if(!App.mobBoardBuilt||el.children.length!==s.board.length||rc){el.innerHTML='';s.board.forEach((c,i)=>el.appendChild(buildCard(c,i,true)));App.mobBoardBuilt=true;App.mobBoardBuiltForRole=App.myRole;return;}
+  patchBoard(el,s);
+}
+
+function updateMobileUI(s){
+  const ids={'mob-score-red':s.scores.red,'mob-score-blue':s.scores.blue,'mob-score-red2':s.scores.red,'mob-score-blue2':s.scores.blue};
+  Object.entries(ids).forEach(([id,v])=>{const el=document.getElementById(id);if(el)el.textContent=v;});
+  updateTurnIndicator(s);
+  const ci=document.getElementById('mob-clue-inline');if(ci)ci.textContent=s.clue.word?s.clue.word.toUpperCase()+' ('+s.clue.count+')':'چاڤەرێی پەیڤا سیخۆری بە...';
+  const rh=t=>App.myRole?'':`<button class="btn-action" style="background:var(--${t});margin-bottom:5px;" onclick="setRole('spymaster','${t}')">سیخۆر 👁️</button><button class="btn-action" style="background:#222;border:1px solid var(--${t});color:white;" onclick="setRole('player','${t}')">یاریزان 👤</button><button class="btn-action" style="background:transparent;border:1px solid #555;color:#aaa;font-size:.8rem;margin-top:4px;" onclick="setRole('spectator','spectator')">تەماشەکار 👀</button>`;
+  const cb=document.getElementById('mob-controls-blue'),cr=document.getElementById('mob-controls-red');
+  if(cb)cb.innerHTML=rh('blue');if(cr)cr.innerHTML=rh('red');
+  ['blue','red'].forEach(t=>{const el=document.getElementById('mob-list-'+t);if(!el)return;el.innerHTML='';s.players.filter(p=>p.team===t).forEach(p=>{const d=document.createElement('div');d.className='mob-player';d.textContent=(p.role==='spymaster'?'👁️':p.role==='spectator'?'👀':'👤')+' '+p.name;el.appendChild(d);});});
+  const mst=document.getElementById('mob-spy-tools'),met=document.getElementById('mob-end-turn');
+  if(mst)mst.style.display=(App.myRole==='spymaster'&&s.turn===App.myTeam&&!s.clue.word)?'block':'none';
+  if(met)met.style.display=(App.myRole==='player'&&s.turn===App.myTeam&&s.clue.word)?'block':'none';
+  const io=s.owner===App.playerName;
+  const mrb=document.getElementById('mob-restart-btn'),mkb=document.getElementById('mob-kick-btn');
+  if(mrb)mrb.style.display=io?'block':'none';if(mkb)mkb.style.display=io?'block':'none';
+  const mgl=document.getElementById('mob-game-log');if(mgl){mgl.innerHTML='';s.log.slice(0,15).forEach(m=>{const d=document.createElement('div');d.className='mob-log-entry';d.textContent=m;mgl.appendChild(d);});}
+  const mcl=document.getElementById('mob-chat-list');if(mcl){mcl.innerHTML='';s.chat.slice(0,15).forEach(m=>{const d=document.createElement('div');d.className='mob-chat-entry';const b=document.createElement('b');b.textContent=m.name+': ';d.appendChild(b);d.appendChild(document.createTextNode(m.msg));mcl.appendChild(d);});}
+  updateMobileBoard(s);
+  if(s.gameOver){document.getElementById('winner-overlay').style.display='flex';const ir=s.winner==='red';document.getElementById('win-emoji').textContent=ir?'🔴':'🔵';document.getElementById('win-txt').textContent=ir?'تیما سۆر بسەرکەفت!':'تیما شین بسەرکەفت!';const bh=s.log&&s.log.some(l=>l.startsWith('💀'));document.getElementById('win-sub').textContent=bh?'💀 کارتا بکوژ هاتە هەلبژارتن!':'';}
+}
+
+function mobTab(name,btn){
+  document.querySelectorAll('.mob-tab-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.mob-tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('mob-panel-'+name).classList.add('active');if(btn)btn.classList.add('active');
+  const tp=document.getElementById('mob-teams-panel');if(tp)tp.style.display=(name==='teams')?'flex':'none';
+  const lp=document.getElementById('mob-log-panel');if(lp)lp.style.display=(name==='log')?'flex':'none';
+}
+
+function renderClueHistory(){
+  const el=document.getElementById('clue-history-list');if(!el)return;el.innerHTML='';
+  const hist=(App.gameState&&App.gameState.clueHistory)||[];
+  if(!hist.length){el.textContent='هێشتا پەیڤ نەهاتیە دانان.';return;}
+  hist.forEach(c=>{const s=document.createElement('span');s.className='clue-pill '+c.team;s.textContent=c.word+' ('+c.count+') — '+c.spymaster;el.appendChild(s);});
+}
+
+function renderKickList(){
+  const el=document.getElementById('kick-list');if(!el)return;el.innerHTML='';
+  const players=(App.gameState&&App.gameState.players)||[];
+  players.filter(p=>p.name!==App.playerName).forEach(p=>{
+    const btn=document.createElement('button');btn.className='btn-action';btn.style.cssText='background:#c0392b;color:white;margin-bottom:6px;';
+    btn.textContent='🚫 '+p.name+' ('+p.team+' / '+p.role+')';
+    btn.onclick=()=>serverKickPlayer(App.roomID,App.playerName,p.name).then(s=>{toggleKickModal(false);if(s&&!s.error)updateUI(s);});
+    el.appendChild(btn);
+  });
+  if(!players.filter(p=>p.name!==App.playerName).length)el.textContent='هیچ یاریزانێ نیە.';
+}
+
+// ── Actions ───────────────────────────────────────────────────────────────────
+function handleFlip(i){
+  if(!App.myRole||App.myRole!=='player')return;
+  if(!App.gameState||App.gameState.turn!==App.myTeam)return;
+  if(App.gameState.board[i].flipped||!App.gameState.clue.word)return;
+  vibrate(40);Sounds.flip();
+  serverFlipCard(App.roomID,i,App.playerName).then(s=>{
+    if(s&&s.board&&s.board[i]){const r=s.board[i].role;if(r===App.myTeam)Sounds.correct();else if(r==='neutral')Sounds.neutral();else if(r!=='black')Sounds.wrong();}
+    if(s)updateUI(s);
+  });
+}
+function submitClue(){const w=document.getElementById('clueW').value.trim(),c=document.getElementById('clueC').value;if(!w)return;serverSubmitClue(App.roomID,w,c,App.playerName).then(s=>{if(s)updateUI(s);});document.getElementById('clueW').value='';}
+function submitClueMob(){const w=document.getElementById('mob-clueW').value.trim(),c=document.getElementById('mob-clueC').value;if(!w)return;serverSubmitClue(App.roomID,w,c,App.playerName).then(s=>{if(s)updateUI(s);});document.getElementById('mob-clueW').value='';}
+function endTurn(){serverEndTurn(App.roomID,App.playerName).then(s=>{if(s)updateUI(s);});}
+function restartGame(){
+  serverRestartGame(App.roomID,App.playerName).then(s=>{
+    if(!s||s.error){alert('تەنها xwediyê ژوورێ dikare nûve bike');return;}
+    App.myRole='';App.myTeam='';App.boardBuilt=false;App.mobBoardBuilt=false;App.lastStateHash='';
+    localStorage.removeItem('r_'+App.roomID);localStorage.removeItem('t_'+App.roomID);
+    Prev.turn=s.turn;Prev.clueWord='';Prev.gameOver=false;updateUI(s);
+  });
+}
+function sendChat(){const input=document.getElementById('chat-input'),msg=input.value.trim();if(!msg)return;input.value='';serverSendMessage(App.roomID,App.playerName,msg).then(s=>{if(s)updateUI(s);});}
+function sendChatMob(){const input=document.getElementById('mob-chat-input'),msg=input.value.trim();if(!msg)return;input.value='';serverSendMessage(App.roomID,App.playerName,msg).then(s=>{if(s)updateUI(s);});}
+function setRole(r,t){
+  if(!App.playerName)App.playerName=(prompt('ناڤێ تە چییە؟')||'').trim().slice(0,40);
+  if(!App.playerName)return;
+  serverJoinPlayer(App.roomID,t,r,App.playerName).then(s=>{
+    if(!s||s.error){alert('ئەڤ پۆستە یێ هاتیە وەرگرتن');return;}
+    App.myRole=r;App.myTeam=t;App.boardBuilt=false;App.mobBoardBuilt=false;App.lastStateHash='';
+    saveSession();updateUI(s);
+  });
+}
+function saveSession(){localStorage.setItem('n_'+App.roomID,App.playerName);localStorage.setItem('r_'+App.roomID,App.myRole);localStorage.setItem('t_'+App.roomID,App.myTeam);}
+function leaveAndReload(){
+  if(App.roomID){serverLeaveRoom(App.roomID,App.playerName);['lastRoom','n_'+App.roomID,'r_'+App.roomID,'t_'+App.roomID,'p_'+App.roomID].forEach(k=>localStorage.removeItem(k));}
+  try{history.replaceState(null,'','?');}catch(e){}location.reload();
+}
+function userLeave(){serverLeaveRoom(App.roomID,App.playerName);localStorage.clear();location.reload();}
+function handleUnload(){if(App.roomID&&App.playerName){serverLeaveRoom(App.roomID,App.playerName);if(realtimeSub)sb.removeChannel(realtimeSub);}}
+function tick(){
+  if(!App.gameState||!App.gameState.matchStartTime||App.gameState.gameOver)return;
+  const s=Math.floor((Date.now()-App.gameState.matchStartTime)/1000);
+  const t=Math.floor(s/60).toString().padStart(2,'0')+':'+(s%60).toString().padStart(2,'0');
+  document.getElementById('match-timer').textContent=t;const mt=document.getElementById('mob-timer');if(mt)mt.textContent=t;
+}
+</script>
+</body>
+</html>
